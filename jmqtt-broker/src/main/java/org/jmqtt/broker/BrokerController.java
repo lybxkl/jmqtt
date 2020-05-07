@@ -119,7 +119,7 @@ public class BrokerController {
             this.sessionStore = this.abstractMqttStore.getSessionStore();
         }
 
-        {// permission pluggable
+        {// permission pluggable 连接和订阅时的检查
             this.connectPermission = new DefaultConnectPermission();
             this.pubSubPermission = new DefaultPubSubPermission();
         }
