@@ -10,6 +10,9 @@ import org.jmqtt.common.config.NettyConfig;
 import org.jmqtt.common.config.StoreConfig;
 import org.jmqtt.common.helper.MixAll;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.core.io.ClassPathResource;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -18,16 +21,23 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.Properties;
 
+@SpringBootApplication
 public class BrokerStartup {
 
     public static void main(String[] args) {
-        try {
-            start(args);
-        } catch (Exception e) {
-            System.out.println("Jmqtt start failure,cause = " + e);
-            e.printStackTrace();
-            System.exit(-1);
-        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    start(args);
+                } catch (Exception e) {
+                    System.out.println("Jmqtt start failure,cause = " + e);
+                    e.printStackTrace();
+                    System.exit(-1);
+                }
+            }
+        }).start();
+        SpringApplication.run(BrokerStartup.class,args);
     }
 
     public static BrokerController start(String[] args) throws Exception {
@@ -58,7 +68,10 @@ public class BrokerStartup {
         JoranConfigurator configurator = new JoranConfigurator();
         configurator.setContext(lc);
         lc.reset();
-        configurator.doConfigure(jmqttHome + "/conf/logback_broker.xml");
+
+        ClassPathResource resource = new ClassPathResource("logback_broker.xml");
+        configurator.doConfigure(resource.getURL());
+        //configurator.doConfigure(jmqttHome + "/conf/logback_broker.xml");
 
         BrokerController brokerController = new BrokerController(brokerConfig,nettyConfig, storeConfig, clusterConfig);
         brokerController.start();
