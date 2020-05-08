@@ -87,13 +87,11 @@ public class BrokerController {
             switch (storeConfig.getStoreType()) {
                 case 1:
                     this.abstractMqttStore = new RDBMqttStore(storeConfig);
-                    this.clusterSessionManager = new DefaultClusterSessionManager();
-                    this.clusterMessageTransfer = new DefaultClusterMessageTransfer();
+
                     break;
                 default:
                     this.abstractMqttStore = new DefaultMqttStore();
-                    this.clusterSessionManager = new DefaultClusterSessionManager();
-                    this.clusterMessageTransfer = new DefaultClusterMessageTransfer();
+
                     break;
             }
             try {
@@ -121,6 +119,9 @@ public class BrokerController {
         this.channelEventListener = new ClientLifeCycleHookService(willMessageStore, messageDispatcher);
         this.remotingServer = new NettyRemotingServer(brokerConfig, nettyConfig, channelEventListener);
         this.reSendMessageService = new ReSendMessageService(offlineMessageStore, flowMessageStore);
+
+        this.clusterSessionManager = new DefaultClusterSessionManager(this.sessionStore,this.subscriptionStore);
+        this.clusterMessageTransfer = new DefaultClusterMessageTransfer(this.messageDispatcher);
 
         int coreThreadNum = Runtime.getRuntime().availableProcessors();
         this.connectExecutor = new ThreadPoolExecutor(coreThreadNum * 2,
