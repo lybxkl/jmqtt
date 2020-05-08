@@ -3,7 +3,7 @@ package org.jmqtt.broker.service.impl;
 import com.alibaba.fastjson.JSON;
 import org.jmqtt.broker.service.LogProducerService;
 import org.jmqtt.broker.utils.RedisPool;
-import org.jmqtt.common.bean.Message;
+import org.jmqtt.common.model.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;

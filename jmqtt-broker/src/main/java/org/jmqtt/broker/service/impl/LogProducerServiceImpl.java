@@ -7,7 +7,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.jmqtt.broker.service.LogProducerService;
-import org.jmqtt.common.bean.Message;
+import org.jmqtt.common.model.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -15,7 +15,8 @@
  */
 package org.jmqtt.broker.service;
 
-import org.jmqtt.common.bean.Message;
+
+import org.jmqtt.common.model.Message;
 
 /**
  * 发送日志到消息队列的接口类
