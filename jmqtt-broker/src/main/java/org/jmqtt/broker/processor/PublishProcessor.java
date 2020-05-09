@@ -1,5 +1,6 @@
 package org.jmqtt.broker.processor;
 
+import com.alibaba.fastjson.JSON;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttPubAckMessage;
@@ -88,7 +89,7 @@ public class PublishProcessor extends AbstractMessageProcessor implements Reques
                     writeError(ctx,"该控制指令数据格式错误");
                     return;
                 }
-                if(!"1".equals(getJedis().get(AppHeard+b[0]))){
+                if(1!=fromJson(getJedis().get(AppHeard+b[0]),Integer.class)){
                     log.warn("未授权该指令");
                     writeError(ctx,"该指令未授权");
                     return;
@@ -166,5 +167,8 @@ public class PublishProcessor extends AbstractMessageProcessor implements Reques
                 log.error("消息回发失败");
             }
         });
+    }
+    private <T> T fromJson(String json, Class<T> clazz) {
+        return JSON.parseObject(json, clazz);
     }
 }
