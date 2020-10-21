@@ -1,10 +1,12 @@
 package org.jmqtt.common.config;
 
+import java.io.File;
+
 public class BrokerConfig {
 
-    private String jmqttHome = System.getProperty("jmqttHome",System.getenv("JMQTT_HOME"));
+    private String jmqttHome = System.getenv("JMQTT_HOME") != null ? System.getenv("JMQTT_HOME") : System.getProperty("user.dir") + File.separator + "jmqtt-distribution";
 
-    private String version = "1.0.0";
+    private String version = "3.0.0";
 
     private boolean anonymousEnable = true;
 
@@ -35,7 +37,7 @@ public class BrokerConfig {
         this.version = version;
     }
 
-    public boolean isAnonymousEnable() {
+    public boolean getAnonymousEnable() {
         return anonymousEnable;
     }
 

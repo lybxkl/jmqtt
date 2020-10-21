@@ -36,32 +36,32 @@ import java.util.concurrent.RejectedExecutionException;
 
 
 public class NettyRemotingServer implements RemotingService {
-
+    int coreThreadNum = Runtime.getRuntime().availableProcessors();
     private static final Logger log = LoggerFactory.getLogger(LoggerName.REMOTING);
     private NettyConfig nettyConfig;
     private EventLoopGroup selectorGroup;
     private EventLoopGroup ioGroup;
     private Class<? extends ServerChannel> clazz;
     private Map<MqttMessageType, Pair<RequestProcessor, ExecutorService>> processorTable;
-    private NettyEventExcutor nettyEventExcutor;
+    private NettyEventExecutor nettyEventExecutor;
     private BrokerConfig brokerConfig;
 
     public NettyRemotingServer(BrokerConfig brokerConfig, NettyConfig nettyConfig, ChannelEventListener listener) {
         this.nettyConfig = nettyConfig;
         this.processorTable = new HashMap();
         this.brokerConfig = brokerConfig;
-        this.nettyEventExcutor = new NettyEventExcutor(listener);
+        this.nettyEventExecutor = new NettyEventExecutor(listener);
 
-        if(!nettyConfig.isUseEpoll()){
-            selectorGroup = new NioEventLoopGroup(nettyConfig.getSelectorThreadNum(),
+        if (!nettyConfig.getUseEpoll()) {
+            selectorGroup = new NioEventLoopGroup(coreThreadNum,
                     new ThreadFactoryImpl("SelectorEventGroup"));
-            ioGroup = new NioEventLoopGroup(nettyConfig.getIoThreadNum(),
+            ioGroup = new NioEventLoopGroup(coreThreadNum * 2,
                     new ThreadFactoryImpl("IOEventGroup"));
             clazz = NioServerSocketChannel.class;
-        }else{
-            selectorGroup = new EpollEventLoopGroup(nettyConfig.getSelectorThreadNum(),
+        } else {
+            selectorGroup = new EpollEventLoopGroup(coreThreadNum,
                     new ThreadFactoryImpl("SelectorEventGroup"));
-            ioGroup = new EpollEventLoopGroup(nettyConfig.getIoThreadNum(),
+            ioGroup = new EpollEventLoopGroup(coreThreadNum * 2,
                     new ThreadFactoryImpl("IOEventGroup"));
             clazz = EpollServerSocketChannel.class;
         }
@@ -70,37 +70,37 @@ public class NettyRemotingServer implements RemotingService {
 
     @Override
     public void start() {
-        //Netty event excutor start
-        this.nettyEventExcutor.start();
+        //Netty event executor start
+        this.nettyEventExecutor.start();
         // start TCP server
-        if (nettyConfig.isStartTcp()) {
+        if (nettyConfig.getStartTcp()) {
             startTcpServer(false, nettyConfig.getTcpPort());
         }
 
-        if (nettyConfig.isStartSslTcp()) {
+        if (nettyConfig.getStartSslTcp()) {
             startTcpServer(true, nettyConfig.getSslTcpPort());
         }
 
         // start Websocket server
-        if (nettyConfig.isStartWebsocket()) {
+        if (nettyConfig.getStartWebsocket()) {
             startWebsocketServer(false, nettyConfig.getWebsocketPort());
         }
 
-        if (nettyConfig.isStartSslWebsocket()) {
+        if (nettyConfig.getStartSslWebsocket()) {
             startWebsocketServer(true, nettyConfig.getSslWebsocketPort());
         }
     }
 
-    private void startWebsocketServer(boolean useSsl, Integer port){
+    private void startWebsocketServer(boolean useSsl, Integer port) {
         ServerBootstrap bootstrap = new ServerBootstrap();
-        bootstrap.group(selectorGroup,ioGroup)
+        bootstrap.group(selectorGroup, ioGroup)
                 .channel(clazz)
                 .option(ChannelOption.SO_BACKLOG, nettyConfig.getTcpBackLog())
-                .childOption(ChannelOption.TCP_NODELAY, nettyConfig.isTcpNoDelay())
+                .childOption(ChannelOption.TCP_NODELAY, nettyConfig.getTcpNoDelay())
                 .childOption(ChannelOption.SO_SNDBUF, nettyConfig.getTcpSndBuf())
                 .option(ChannelOption.SO_RCVBUF, nettyConfig.getTcpRcvBuf())
-                .option(ChannelOption.SO_REUSEADDR, nettyConfig.isTcpReuseAddr())
-                .childOption(ChannelOption.SO_KEEPALIVE, nettyConfig.isTcpKeepAlive())
+                .option(ChannelOption.SO_REUSEADDR, nettyConfig.getTcpReuseAddr())
+                .childOption(ChannelOption.SO_KEEPALIVE, nettyConfig.getTcpKeepAlive())
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) throws Exception {
@@ -108,7 +108,7 @@ public class NettyRemotingServer implements RemotingService {
                         if (useSsl) {
                             pipeline.addLast("ssl", NettySslHandler.getSslHandler(
                                     socketChannel,
-                                    nettyConfig.isUseClientCA(),
+                                    nettyConfig.getUseClientCA(),
                                     nettyConfig.getSslKeyStoreType(),
                                     brokerConfig.getJmqttHome() + nettyConfig.getSslKeyFilePath(),
                                     nettyConfig.getSslManagerPwd(),
@@ -116,39 +116,40 @@ public class NettyRemotingServer implements RemotingService {
                             ));
                         }
                         pipeline.addLast("idleStateHandler", new IdleStateHandler(0, 0, 60))
-                                .addLast("httpCodec",new HttpServerCodec())
-                                .addLast("aggregator",new HttpObjectAggregator(65535))
+                                .addLast("httpCodec", new HttpServerCodec())
+                                .addLast("aggregator", new HttpObjectAggregator(65535))
                                 .addLast("compressor ", new HttpContentCompressor())
-                                .addLast("webSocketHandler",new WebSocketServerProtocolHandler("/mqtt", MixAll.MQTT_VERSION_SUPPORT,true))
-                                .addLast("byteBuf2WebSocketEncoder",new ByteBuf2WebSocketEncoder())
-                                .addLast("webSocket2ByteBufDecoder",new WebSocket2ByteBufDecoder())
+                                .addLast("webSocketHandler", new WebSocketServerProtocolHandler("/mqtt", MixAll.MQTT_VERSION_SUPPORT, true))
+                                .addLast("byteBuf2WebSocketEncoder", new ByteBuf2WebSocketEncoder())
+                                .addLast("webSocket2ByteBufDecoder", new WebSocket2ByteBufDecoder())
                                 .addLast("mqttDecoder", new MqttDecoder(nettyConfig.getMaxMsgSize()))
                                 .addLast("mqttEncoder", MqttEncoder.INSTANCE)
-                                .addLast("nettyConnectionManager", new NettyConnectHandler(nettyEventExcutor))
+                                .addLast("nettyConnectionManager", new NettyConnectHandler(
+                                        nettyEventExecutor))
                                 .addLast("nettyMqttHandler", new NettyMqttHandler());
                     }
                 });
-        if(nettyConfig.isPooledByteBufAllocatorEnable()){
+        if (nettyConfig.getPooledByteBufAllocatorEnable()) {
             bootstrap.childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         }
         try {
             ChannelFuture future = bootstrap.bind(port).sync();
-            log.info("Start webSocket server {}  success,port = {}", useSsl?"with ssl":"", port);
-        }catch (InterruptedException ex){
-            log.error("Start webSocket server {} failure.cause={}", useSsl?"with ssl":"", ex);
+            log.info("Start webSocket server {}  success,port = {}", useSsl ? "with ssl" : "", port);
+        } catch (InterruptedException ex) {
+            log.error("Start webSocket server {} failure.cause={}", useSsl ? "with ssl" : "", ex);
         }
     }
 
-    private void startTcpServer(boolean useSsl, Integer port){
+    private void startTcpServer(boolean useSsl, Integer port) {
         ServerBootstrap bootstrap = new ServerBootstrap();
-        bootstrap.group(selectorGroup,ioGroup)
+        bootstrap.group(selectorGroup, ioGroup)
                 .channel(clazz)
                 .option(ChannelOption.SO_BACKLOG, nettyConfig.getTcpBackLog())
-                .childOption(ChannelOption.TCP_NODELAY, nettyConfig.isTcpNoDelay())
+                .childOption(ChannelOption.TCP_NODELAY, nettyConfig.getTcpNoDelay())
                 .childOption(ChannelOption.SO_SNDBUF, nettyConfig.getTcpSndBuf())
                 .option(ChannelOption.SO_RCVBUF, nettyConfig.getTcpRcvBuf())
-                .option(ChannelOption.SO_REUSEADDR, nettyConfig.isTcpReuseAddr())
-                .childOption(ChannelOption.SO_KEEPALIVE, nettyConfig.isTcpKeepAlive())
+                .option(ChannelOption.SO_REUSEADDR, nettyConfig.getTcpReuseAddr())
+                .childOption(ChannelOption.SO_KEEPALIVE, nettyConfig.getTcpKeepAlive())
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel socketChannel) throws Exception {
@@ -156,7 +157,7 @@ public class NettyRemotingServer implements RemotingService {
                         if (useSsl) {
                             pipeline.addLast("ssl", NettySslHandler.getSslHandler(
                                     socketChannel,
-                                    nettyConfig.isUseClientCA(),
+                                    nettyConfig.getUseClientCA(),
                                     nettyConfig.getSslKeyStoreType(),
                                     brokerConfig.getJmqttHome() + nettyConfig.getSslKeyFilePath(),
                                     nettyConfig.getSslManagerPwd(),
@@ -166,21 +167,21 @@ public class NettyRemotingServer implements RemotingService {
                         pipeline.addLast("idleStateHandler", new IdleStateHandler(60, 0, 0))
                                 .addLast("mqttEncoder", MqttEncoder.INSTANCE)
                                 .addLast("mqttDecoder", new MqttDecoder(nettyConfig.getMaxMsgSize()))
-                                .addLast("nettyConnectionManager", new NettyConnectHandler(nettyEventExcutor))
+                                .addLast("nettyConnectionManager", new NettyConnectHandler(
+                                        nettyEventExecutor))
                                 .addLast("nettyMqttHandler", new NettyMqttHandler());
                     }
                 });
-        if(nettyConfig.isPooledByteBufAllocatorEnable()){
+        if (nettyConfig.getPooledByteBufAllocatorEnable()) {
             bootstrap.childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         }
         try {
             ChannelFuture future = bootstrap.bind(port).sync();
-            log.info("Start tcp server {} success,port = {}", useSsl?"with ssl":"", port);
-        }catch (InterruptedException ex){
-            log.error("Start tcp server {} failure.cause={}", useSsl?"with ssl":"", ex);
+            log.info("Start tcp server {} success,port = {}", useSsl ? "with ssl" : "", port);
+        } catch (InterruptedException ex) {
+            log.error("Start tcp server {} failure.cause={}", useSsl ? "with ssl" : "", ex);
         }
     }
-
 
 
     @Override
@@ -193,34 +194,26 @@ public class NettyRemotingServer implements RemotingService {
         }
     }
 
-    public void registerProcessor(MqttMessageType mqttType,RequestProcessor processor,ExecutorService executorService){
-        this.processorTable.put(mqttType,new Pair<>(processor,executorService));
+    public void registerProcessor(MqttMessageType mqttType, RequestProcessor processor, ExecutorService executorService) {
+        this.processorTable.put(mqttType, new Pair<>(processor, executorService));
     }
 
     class NettyMqttHandler extends ChannelInboundHandlerAdapter {
-
         @Override
-        public void channelRead(ChannelHandlerContext ctx, Object obj){
+        public void channelRead(ChannelHandlerContext ctx, Object obj) {
             MqttMessage mqttMessage = (MqttMessage) obj;
-            if(mqttMessage != null && mqttMessage.decoderResult().isSuccess()){
+            if (mqttMessage != null && mqttMessage.decoderResult().isSuccess()) {
                 MqttMessageType messageType = mqttMessage.fixedHeader().messageType();
-                log.debug("[Remoting] -> receive mqtt code,type:{}",messageType.value());
-                Runnable runnable = new Runnable() {
-                    @Override
-                    public void run() {
-                        processorTable.get(messageType).getObject1().processRequest(ctx,mqttMessage);
-                    }
-                };
-                try{
+                log.info("[Remoting] -> receive mqtt code,type:{},name:{}", messageType.value(), messageType.name());
+                Runnable runnable = () -> processorTable.get(messageType).getObject1().processRequest(ctx, mqttMessage);
+                try {
                     processorTable.get(messageType).getObject2().submit(runnable);
-                }catch (RejectedExecutionException ex){
-                    log.warn("Reject mqtt request,cause={}",ex.getMessage());
+                } catch (RejectedExecutionException ex) {
+                    log.warn("Reject mqtt request,cause={}", ex.getMessage());
                 }
-            }else{
+            } else {
                 ctx.close();
             }
         }
-
     }
-
 }
