@@ -44,11 +44,12 @@ public class RedisPool {
         jedisPoolConfig.setMaxTotal(maxtotal);
         jedisPoolConfig.setMaxWaitMillis(maxwaitmillis);
         jedisPool = new JedisPool(jedisPoolConfig,host,port);
+        //jedisPool.getResource().set("key","key");
         logger.info("jedisPool init success");
     }
     public static Jedis getJedis(){
         Jedis jedis = jedisPool.getResource();
-        jedis.auth(password);
+        //jedis.auth(password);
         jedis.select(db);
         return jedis;
     }
